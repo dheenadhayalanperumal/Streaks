@@ -1,0 +1,1 @@
+ALTER TABLE campaigns ADD COLUMN geofence_enabled TINYINT(1) NOT NULL DEFAULT 0;

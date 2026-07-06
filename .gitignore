@@ -1,0 +1,12 @@
+# Backend
+backend/.env
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+
+# OS / editor
+.DS_Store
+*.log

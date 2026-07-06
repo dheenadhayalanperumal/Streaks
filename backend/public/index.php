@@ -1,0 +1,112 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Streaks API — single front controller.
+ * Run locally with:  php -S localhost:8080 -t public public/index.php
+ */
+
+error_reporting(E_ALL & ~E_DEPRECATED);
+
+require __DIR__ . '/../config/config.php';
+
+// PSR-4-ish autoloader for the Streaks\ namespace.
+spl_autoload_register(function (string $class): void {
+    $prefix = 'Streaks\\';
+    if (!str_starts_with($class, $prefix)) {
+        return;
+    }
+    $rel = str_replace('\\', '/', substr($class, strlen($prefix)));
+    $file = __DIR__ . '/../src/' . $rel . '.php';
+    if (is_file($file)) {
+        require $file;
+    }
+});
+
+use Streaks\Core\Auth;
+use Streaks\Core\Request;
+use Streaks\Core\Response;
+use Streaks\Core\Router;
+use Streaks\Controllers\ClientController;
+use Streaks\Controllers\Admin\AuthController;
+use Streaks\Controllers\Admin\CampaignController;
+use Streaks\Controllers\Admin\RewardController;
+use Streaks\Controllers\Admin\UserController;
+use Streaks\Controllers\Admin\StatsController;
+use Streaks\Controllers\Admin\SettingsController;
+
+// ---- CORS -----------------------------------------------------------------
+$cfg = streaks_config();
+header('Access-Control-Allow-Origin: ' . $cfg['cors_origin']);
+header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-User-Id, X-User-Identifier, Idempotency-Key');
+header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+header('Vary: Origin');
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+
+$req = Request::capture();
+$router = new Router();
+
+$client   = new ClientController();
+$auth     = new AuthController();
+$campaign = new CampaignController();
+$reward   = new RewardController();
+$user     = new UserController();
+$stats    = new StatsController();
+$settings = new SettingsController();
+
+// Wrap an admin handler with auth enforcement.
+$admin = fn(callable $h): callable => function (Request $r) use ($h) {
+    Auth::requireAdmin($r);
+    return $h($r);
+};
+
+// ---- Public / client ------------------------------------------------------
+$router->get('/api/health', fn() => ['status' => 'ok', 'time' => date('c')]);
+$router->get('/api/brand', fn($r) => $client->brand());
+$router->get('/api/campaigns/active', fn($r) => $client->activeCampaigns());
+$router->post('/api/enroll', fn($r) => $client->enroll($r));
+$router->post('/api/action', fn($r) => $client->action($r));
+$router->get('/api/me/streaks', fn($r) => $client->myStreaks($r));
+$router->get('/api/me/rewards', fn($r) => $client->myRewards($r));
+$router->post('/api/rewards/:id/redeem', fn($r) => $client->redeem($r));
+
+// ---- Admin auth -----------------------------------------------------------
+$router->post('/api/admin/login', fn($r) => $auth->login($r));
+$router->post('/api/admin/logout', fn($r) => $auth->logout($r));
+
+// ---- Admin: campaigns -----------------------------------------------------
+$router->get('/api/admin/campaigns', $admin(fn($r) => $campaign->index()));
+$router->post('/api/admin/campaigns', $admin(fn($r) => $campaign->create($r)));
+$router->get('/api/admin/campaigns/:id', $admin(fn($r) => $campaign->show($r)));
+$router->put('/api/admin/campaigns/:id', $admin(fn($r) => $campaign->update($r)));
+$router->delete('/api/admin/campaigns/:id', $admin(fn($r) => $campaign->destroy($r)));
+$router->get('/api/admin/campaigns/:id/milestones', $admin(fn($r) => $campaign->milestones($r)));
+$router->put('/api/admin/campaigns/:id/milestones', $admin(fn($r) => $campaign->replaceMilestones($r)));
+
+// ---- Admin: rewards -------------------------------------------------------
+$router->get('/api/admin/rewards', $admin(fn($r) => $reward->index()));
+$router->post('/api/admin/rewards', $admin(fn($r) => $reward->create($r)));
+$router->put('/api/admin/rewards/:id', $admin(fn($r) => $reward->update($r)));
+$router->delete('/api/admin/rewards/:id', $admin(fn($r) => $reward->destroy($r)));
+
+// ---- Admin: users ---------------------------------------------------------
+$router->get('/api/admin/users', $admin(fn($r) => $user->index($r)));
+$router->get('/api/admin/users/:id', $admin(fn($r) => $user->show($r)));
+$router->post('/api/admin/users/:id/adjust-streak', $admin(fn($r) => $user->adjustStreak($r)));
+
+// ---- Admin: brand profile -------------------------------------------------
+$router->get('/api/admin/brand', $admin(fn($r) => $settings->show()));
+$router->put('/api/admin/brand', $admin(fn($r) => $settings->update($r)));
+
+// ---- Admin: reward issues / stats / analytics / activity ------------------
+$router->patch('/api/admin/reward-issues/:id', $admin(fn($r) => $auth->updateRewardIssue($r)));
+$router->get('/api/admin/stats', $admin(fn($r) => $stats->stats()));
+$router->get('/api/admin/analytics', $admin(fn($r) => $stats->analytics($r)));
+$router->get('/api/admin/activity', $admin(fn($r) => $stats->activity($r)));
+
+$router->dispatch($req);
