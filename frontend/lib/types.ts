@@ -87,6 +87,47 @@ export interface UserRow {
   last_activity: string | null;
 }
 
+export interface WaTemplate {
+  id: number;
+  name: string;
+  body: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WaSettings {
+  wa_enabled: boolean;
+  wa_phone_number_id: string | null;
+  wa_template_name: string;
+  wa_template_body: string | null;
+}
+
+export interface WaStatus {
+  enabled: boolean;
+  live: boolean;
+  mode: "live" | "simulation";
+}
+
+export interface WaOptOut {
+  mobile: string;
+  created_at: string;
+}
+
+export interface WaRecipient {
+  id: number;
+  name: string;
+  mobile: string;
+  code: string | null;
+}
+
+export interface BroadcastResult {
+  total: number;
+  sent: number;
+  simulated: number;
+  failed: number;
+  skipped: number;
+}
+
 export interface CalendarEntry {
   id: number;
   date: string;

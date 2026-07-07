@@ -1,42 +1,44 @@
 /* ============================================================
-   Streaks — Admin console  ·  "Ember Console" aesthetic
-   Warm charcoal operator surface with ember/amber accents that
-   tie back to the flame brand and the customer reward-arcade UI.
+   Streaks — Admin console  ·  "Aurora Console" aesthetic
+   Premium abstract operator surface: deep violet-charcoal with a
+   flat iridescent accent set (violet, indigo, cyan + a magenta
+   pop). Solid colors only — no gradients.
    Distinctive type system: Bricolage Grotesque (display) +
    Hanken Grotesk (body), shared with the customer app.
    ============================================================ */
 
 :root {
-  /* Warm near-black charcoal — not cold slate. */
-  --bg: #0c0a09;
-  --bg-2: #100d0b;
-  --surface: #16120f;
-  --surface-2: #1e1813;
-  --surface-3: #271e17;
-  --border: #2a221c;
-  --border-strong: #3a2e24;
+  /* Deep near-black with a cool violet tint — not warm charcoal. */
+  --bg: #09080f;
+  --bg-2: #0d0b18;
+  --surface: #141122;
+  --surface-2: #1c1834;
+  --surface-3: #251f45;
+  --border: #2a2547;
+  --border-strong: #3c3565;
 
-  --text: #f4efe9;
-  --text-dim: #a89c8f;
-  --text-faint: #766a5e;
+  --text: #f3f1fb;
+  --text-dim: #aaa3cc;
+  --text-faint: #746d97;
 
-  /* Ember accent family (matches the flame + customer gradient). */
-  --brand: #f5793b;
-  --brand-2: #f7b733;
-  --ember: #ef5a3c;
-  --gold: #ffc01e;
-  --green: #46d19a;
-  --blue: #58a6ff;
-  --purple: #b58bff;
-  --red: #ff6b6b;
+  /* Aurora accent family (iridescent violet → indigo → cyan + magenta). */
+  --brand: #a78bfa;
+  --brand-2: #22d3ee;
+  --ember: #8b5cf6;
+  --gold: #f472b6;
+  --green: #34d399;
+  --blue: #60a5fa;
+  --purple: #c084fc;
+  --red: #fb7185;
 
-  --grad-ember: linear-gradient(120deg, #ef5a3c 0%, #f5793b 46%, #f7b733 100%);
-  --grad-ember-soft: linear-gradient(120deg, rgba(239,90,60,0.16), rgba(247,183,51,0.10));
+  /* Flat accent (no gradients). --grad-ember kept as a name for a solid fill. */
+  --grad-ember: #8b5cf6;
+  --grad-ember-soft: rgba(139, 92, 246, 0.14);
 
   --radius: 15px;
   --radius-sm: 10px;
-  --shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 10px 34px rgba(239, 90, 60, 0.22);
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  --shadow-glow: 0 10px 34px rgba(139, 92, 246, 0.30);
 
   --font-ui: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   --font-head: var(--font-display), var(--font-body), system-ui, sans-serif;
@@ -53,17 +55,14 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-/* Atmospheric depth — layered ember glows fixed behind everything. */
+/* Flat backdrop — solid deep violet-black, no gradients. */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(80% 55% at 82% -8%, rgba(239, 90, 60, 0.14), transparent 60%),
-    radial-gradient(60% 45% at 6% 4%, rgba(247, 183, 51, 0.07), transparent 55%),
-    linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 45%);
+  background: var(--bg);
 }
 .app, .login-wrap { position: relative; z-index: 1; }
 
@@ -89,7 +88,7 @@ h1, h2, h3, .brand { font-family: var(--font-head); }
 .sidebar {
   width: 252px;
   flex-shrink: 0;
-  background: linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 100%);
+  background: var(--surface);
   border-right: 1px solid var(--border);
   padding: 24px 16px;
   display: flex;
@@ -136,7 +135,7 @@ h1, h2, h3, .brand { font-family: var(--font-head); }
   height: 66px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 30px; position: sticky; top: 0;
-  background: rgba(12, 10, 9, 0.72);
+  background: rgba(9, 8, 15, 0.72);
   backdrop-filter: blur(12px) saturate(1.2); z-index: 5;
 }
 .topbar h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.025em; }
@@ -198,7 +197,7 @@ td .muted { color: var(--text-faint); font-size: 12.5px; }
 }
 .pill.green { color: var(--green); border-color: rgba(70,209,154,0.32); background: rgba(70,209,154,0.10); }
 .pill.blue  { color: var(--blue);  border-color: rgba(88,166,255,0.32); background: rgba(88,166,255,0.10); }
-.pill.orange{ color: var(--brand); border-color: rgba(245,121,59,0.32); background: rgba(245,121,59,0.10); }
+.pill.orange{ color: #fbbf24; border-color: rgba(251,191,36,0.30); background: rgba(251,191,36,0.10); }
 .pill.purple{ color: var(--purple);border-color: rgba(181,139,255,0.32); background: rgba(181,139,255,0.10); }
 .pill.red   { color: var(--red);   border-color: rgba(255,107,107,0.32); background: rgba(255,107,107,0.10); }
 .pill.gray  { color: var(--text-faint); }
@@ -210,13 +209,13 @@ td .muted { color: var(--text-faint); font-size: 12.5px; }
   background: var(--surface-2); color: var(--text); font-weight: 600; cursor: pointer;
   transition: transform 0.06s, background 0.16s, border-color 0.16s, box-shadow 0.16s;
 }
-.btn:hover { border-color: #4a3a2c; background: var(--surface-3); }
+.btn:hover { border-color: #4a4172; background: var(--surface-3); }
 .btn:active { transform: translateY(1px); }
 .btn.primary {
-  background: var(--grad-ember); border: none; color: #241206; font-weight: 700;
+  background: var(--grad-ember); border: none; color: #0a0816; font-weight: 700;
   box-shadow: var(--shadow-glow);
 }
-.btn.primary:hover { filter: brightness(1.06); box-shadow: 0 12px 40px rgba(239,90,60,0.34); }
+.btn.primary:hover { filter: brightness(1.08); box-shadow: 0 12px 40px rgba(139,92,246,0.40); }
 .btn.ghost { background: transparent; }
 .btn.danger { color: var(--red); border-color: rgba(255,107,107,0.32); background: rgba(255,107,107,0.08); }
 .btn.sm { padding: 6px 12px; font-size: 12.5px; border-radius: 8px; }
@@ -232,8 +231,8 @@ td .muted { color: var(--text-faint); font-size: 12.5px; }
 }
 .input::placeholder { color: var(--text-faint); }
 .input:focus {
-  border-color: rgba(245, 121, 59, 0.6);
-  box-shadow: 0 0 0 3px rgba(245, 121, 59, 0.14);
+  border-color: rgba(139, 92, 246, 0.65);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
 }
 textarea.input { resize: vertical; min-height: 74px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -241,7 +240,7 @@ textarea.input { resize: vertical; min-height: 74px; }
 
 /* ---------- Modal ---------- */
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(6, 4, 3, 0.74);
+  position: fixed; inset: 0; background: rgba(5, 4, 11, 0.76);
   display: grid; place-items: center; z-index: 50; padding: 20px;
   backdrop-filter: blur(5px);
   animation: riseIn 0.2s ease both;
@@ -263,12 +262,12 @@ textarea.input { resize: vertical; min-height: 74px; }
 .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; justify-content: flex-end; }
 .bar {
   width: 100%; max-width: 46px; border-radius: 7px 7px 3px 3px;
-  background: linear-gradient(180deg, var(--brand), rgba(247,183,51,0.5));
+  background: var(--brand);
   min-height: 3px; transition: height 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-  box-shadow: 0 -2px 18px rgba(245, 121, 59, 0.2);
+  box-shadow: 0 -2px 18px rgba(139, 92, 246, 0.24);
 }
-.bar.blue { background: linear-gradient(180deg, var(--blue), rgba(88,166,255,0.36)); box-shadow: 0 -2px 18px rgba(88,166,255,0.18); }
-.bar.green { background: linear-gradient(180deg, var(--green), rgba(70,209,154,0.36)); box-shadow: none; }
+.bar.blue { background: var(--blue); box-shadow: 0 -2px 18px rgba(88,166,255,0.18); }
+.bar.green { background: var(--green); box-shadow: none; }
 .bar-label { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
 .bar-val { font-size: 11px; color: var(--text-dim); font-weight: 700; font-variant-numeric: tabular-nums; }
 
@@ -303,10 +302,7 @@ textarea.input { resize: vertical; min-height: 74px; }
 /* ---------- Login ---------- */
 .login-wrap {
   min-height: 100vh; display: grid; place-items: center; padding: 20px;
-  background:
-    radial-gradient(1100px 560px at 72% -12%, rgba(239, 90, 60, 0.18), transparent 60%),
-    radial-gradient(800px 420px at 20% 108%, rgba(247, 183, 51, 0.10), transparent 55%),
-    var(--bg);
+  background: var(--bg);
 }
 .login-card { width: 100%; max-width: 408px; box-shadow: var(--shadow); }
 .login-card .brand { justify-content: center; font-size: 28px; padding-bottom: 10px; }

@@ -12,6 +12,9 @@ const NAV = [
   { href: "/admin/analytics", label: "Analytics", ico: "📈" },
   { href: "/admin/users", label: "Users", ico: "👤" },
   { href: "/admin/settings", label: "Brand Profile", ico: "🎨" },
+  { href: "/admin/whatsapp", label: "WhatsApp", ico: "💬" },
+  { href: "/admin/templates", label: "Templates", ico: "📝" },
+  { href: "/admin/promotions", label: "Promotions", ico: "📣" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

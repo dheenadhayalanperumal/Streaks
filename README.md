@@ -81,6 +81,9 @@ The **StreakEngine** (`backend/src/Services/StreakEngine.php`) is the integrity 
 | Reward Calendar  | Schedule date-bound rewards on a month grid |
 | Analytics        | DAU, streak-length cohorts, milestone funnel; filter by campaign & date range |
 | Users            | Participant list + drill-down (streak timeline, rewards, manual adjust) |
+| WhatsApp         | Delivery settings, live/simulation mode, test send, opt-out (STOP) management |
+| Templates        | Editable message-template library with `[Bracket]` tokens + live preview |
+| Promotions       | Broadcast a template to an audience segment; per-recipient token fill + tally |
 
 ## API surface
 
@@ -113,6 +116,23 @@ Client requests identify the participant via `X-User-Id` or `X-User-Identifier`
 | POST | `/users/:id/adjust-streak` | Manual streak adjustment |
 | PATCH | `/reward-issues/:id` | Update reward status |
 | GET | `/stats`, `/analytics`, `/activity` | Dashboard data |
+| GET/PUT | `/whatsapp/settings` · GET `/whatsapp/status` | WhatsApp delivery config + live/simulation mode |
+| GET/POST | `/whatsapp/templates` · PUT/DELETE `/whatsapp/templates/:id` | Template library |
+| GET/POST | `/whatsapp/optouts` · DELETE `/whatsapp/optouts/:mobile` | Opt-out (STOP) management |
+| GET | `/whatsapp/recipients?segment=` | Resolve an audience segment (minus opt-outs) |
+| POST | `/whatsapp/broadcast`, `/whatsapp/test` | Send a promotion / a sample reward |
+
+### Public (Meta-facing)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET  | `/api/whatsapp/webhook` | Subscription verification (echoes `hub.challenge`) |
+| POST | `/api/whatsapp/webhook` | Inbound messages; records STOP / UNSUBSCRIBE as opt-outs |
+
+WhatsApp runs in **simulation mode** (messages logged, not sent) unless
+`WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` are set in the backend
+env. See `backend/.env.example` for all `WHATSAPP_*` variables. Apply the schema
+with `mysql -u root streaks < migrations/005_whatsapp.sql`.
 
 ## Data model
 

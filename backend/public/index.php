@@ -28,12 +28,14 @@ use Streaks\Core\Request;
 use Streaks\Core\Response;
 use Streaks\Core\Router;
 use Streaks\Controllers\ClientController;
+use Streaks\Controllers\WhatsAppWebhookController;
 use Streaks\Controllers\Admin\AuthController;
 use Streaks\Controllers\Admin\CampaignController;
 use Streaks\Controllers\Admin\RewardController;
 use Streaks\Controllers\Admin\UserController;
 use Streaks\Controllers\Admin\StatsController;
 use Streaks\Controllers\Admin\SettingsController;
+use Streaks\Controllers\Admin\WhatsAppController;
 
 // ---- CORS -----------------------------------------------------------------
 $cfg = streaks_config();
@@ -58,6 +60,8 @@ $reward   = new RewardController();
 $user     = new UserController();
 $stats    = new StatsController();
 $settings = new SettingsController();
+$whatsapp = new WhatsAppController();
+$waHook   = new WhatsAppWebhookController();
 
 // Wrap an admin handler with auth enforcement.
 $admin = fn(callable $h): callable => function (Request $r) use ($h) {
@@ -74,6 +78,10 @@ $router->post('/api/action', fn($r) => $client->action($r));
 $router->get('/api/me/streaks', fn($r) => $client->myStreaks($r));
 $router->get('/api/me/rewards', fn($r) => $client->myRewards($r));
 $router->post('/api/rewards/:id/redeem', fn($r) => $client->redeem($r));
+
+// ---- Public: WhatsApp webhook (Meta -> us) --------------------------------
+$router->get('/api/whatsapp/webhook', fn($r) => $waHook->verify($r));
+$router->post('/api/whatsapp/webhook', fn($r) => $waHook->receive($r));
 
 // ---- Admin auth -----------------------------------------------------------
 $router->post('/api/admin/login', fn($r) => $auth->login($r));
@@ -102,6 +110,21 @@ $router->post('/api/admin/users/:id/adjust-streak', $admin(fn($r) => $user->adju
 // ---- Admin: brand profile -------------------------------------------------
 $router->get('/api/admin/brand', $admin(fn($r) => $settings->show()));
 $router->put('/api/admin/brand', $admin(fn($r) => $settings->update($r)));
+
+// ---- Admin: WhatsApp integration / templates / promotions -----------------
+$router->get('/api/admin/whatsapp/status', $admin(fn($r) => $whatsapp->status()));
+$router->get('/api/admin/whatsapp/settings', $admin(fn($r) => $whatsapp->showSettings()));
+$router->put('/api/admin/whatsapp/settings', $admin(fn($r) => $whatsapp->updateSettings($r)));
+$router->get('/api/admin/whatsapp/templates', $admin(fn($r) => $whatsapp->templates()));
+$router->post('/api/admin/whatsapp/templates', $admin(fn($r) => $whatsapp->createTemplate($r)));
+$router->put('/api/admin/whatsapp/templates/:id', $admin(fn($r) => $whatsapp->updateTemplate($r)));
+$router->delete('/api/admin/whatsapp/templates/:id', $admin(fn($r) => $whatsapp->deleteTemplate($r)));
+$router->get('/api/admin/whatsapp/optouts', $admin(fn($r) => $whatsapp->optOuts()));
+$router->post('/api/admin/whatsapp/optouts', $admin(fn($r) => $whatsapp->addOptOut($r)));
+$router->delete('/api/admin/whatsapp/optouts/:mobile', $admin(fn($r) => $whatsapp->removeOptOut($r)));
+$router->get('/api/admin/whatsapp/recipients', $admin(fn($r) => $whatsapp->recipients($r)));
+$router->post('/api/admin/whatsapp/broadcast', $admin(fn($r) => $whatsapp->broadcast($r)));
+$router->post('/api/admin/whatsapp/test', $admin(fn($r) => $whatsapp->test($r)));
 
 // ---- Admin: reward issues / stats / analytics / activity ------------------
 $router->patch('/api/admin/reward-issues/:id', $admin(fn($r) => $auth->updateRewardIssue($r)));

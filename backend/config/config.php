@@ -40,6 +40,17 @@ function streaks_config(): array
         'cors_origin'    => $get('CORS_ORIGIN', 'http://localhost:3000'),
         'admin_email'    => $get('ADMIN_EMAIL', 'admin@streaks.test'),
         'admin_password' => $get('ADMIN_PASSWORD', 'admin123'),
+
+        // WhatsApp Business Cloud API. Leave the token / phone-number id blank
+        // to run in SIMULATION mode (messages are logged, never sent to Meta).
+        'whatsapp' => [
+            'access_token'         => $get('WHATSAPP_ACCESS_TOKEN', ''),
+            'phone_number_id'      => $get('WHATSAPP_PHONE_NUMBER_ID', ''),
+            'api_version'          => $get('WHATSAPP_API_VERSION', 'v25.0'),
+            'template_lang'        => $get('WHATSAPP_TEMPLATE_LANG', 'en_US'),
+            'default_country_code' => $get('WHATSAPP_DEFAULT_COUNTRY_CODE', '91'),
+            'verify_token'         => $get('WHATSAPP_VERIFY_TOKEN', 'streaks-verify'),
+        ],
     ];
 
     return $config;
