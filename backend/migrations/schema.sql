@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
   token         CHAR(64)      NOT NULL PRIMARY KEY,
   admin_user_id BIGINT UNSIGNED NOT NULL,
   created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  expires_at    TIMESTAMP     NOT NULL,
+  expires_at    TIMESTAMP     NULL DEFAULT NULL,   -- always set explicitly on login
   CONSTRAINT fk_session_admin FOREIGN KEY (admin_user_id)
     REFERENCES admin_users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
