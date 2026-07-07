@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
+import { apiBase } from "./apiBase";
 
 const TOKEN_KEY = "streaks_admin_token";
 
@@ -29,7 +29,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${apiBase()}${path}`, { ...options, headers });
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
 

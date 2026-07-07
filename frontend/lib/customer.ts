@@ -3,7 +3,8 @@
 // deliberately separate from lib/api.ts (which carries the admin Bearer token
 // and force-redirects to /login on 401).
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
+import { apiBase } from "./apiBase";
+
 const STORE_KEY = "streaks_customer";
 
 export interface Customer {
@@ -48,7 +49,7 @@ async function req<T>(
   };
   if (identifier) headers["X-User-Identifier"] = identifier;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${apiBase()}${path}`, { ...options, headers });
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {

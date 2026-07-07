@@ -7,6 +7,9 @@ frontend/.next/
 frontend/out/
 frontend/.env.local
 
+# Deploy artifacts
+dist/
+
 # OS / editor
 .DS_Store
 *.log

@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
 
 const display = Bricolage_Grotesque({
@@ -24,6 +25,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable}`}>
+      <head>
+        {/* Runtime API endpoint — loaded before the app so fetches resolve. */}
+        <Script src="/config.js" strategy="beforeInteractive" />
+      </head>
       <body>{children}</body>
     </html>
   );
