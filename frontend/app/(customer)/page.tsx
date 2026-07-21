@@ -20,6 +20,7 @@ import {
   ErrorModal,
   rewardIcon,
 } from "./ui";
+import { LIMITS, mobile as validMobile, personName } from "@/lib/validation";
 
 type Step = "signup" | "otp" | "dashboard";
 type Modal =
@@ -112,8 +113,9 @@ export default function StreakPage() {
   function submitSignup(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (name.trim().length < 2) return setError("Please enter your name.");
-    if (!/^\d{10}$/.test(phone)) return setError("Enter a valid 10-digit mobile number.");
+    // The reason is rendered inline against the offending field, so don't
+    // repeat it in the banner above the form.
+    if (personName(name, "Your name") || validMobile(phone)) return;
     // No OTP backend — we simulate delivery and advance to the verify screen.
     setStep("otp");
   }
@@ -287,6 +289,18 @@ function SignupView({
   onPhone: (v: string) => void;
   onSubmit: (e: React.FormEvent) => void;
 }) {
+  // Inline hints appear once the field has been visited — or once the form has
+  // been submitted, since the commonest failure is tapping "Send OTP" straight
+  // from a half-typed field, which never fires a blur.
+  const [seen, setSeen] = useState({ name: false, phone: false });
+  const nameError = seen.name ? personName(name, "Your name") : null;
+  const phoneError = seen.phone ? validMobile(phone) : null;
+
+  function handleSubmit(e: React.FormEvent) {
+    setSeen({ name: true, phone: true });
+    onSubmit(e);
+  }
+
   return (
     <>
       <BrandBadge brand={brand} />
@@ -298,34 +312,48 @@ function SignupView({
           "Show up daily. Win bigger. Don't break the chain — claim the reward."
         }
       />
-      <form className="ccd-card ccd-in d2" onSubmit={onSubmit}>
+      <form className="ccd-card ccd-in d2" onSubmit={handleSubmit} noValidate>
         <div className="ccd-eyebrow">
           <span className="label">One step away</span>
         </div>
         {error && <div className="ccd-error">{error}</div>}
-        <div className="ccd-field">
-          <label>Your Name</label>
+        <div className={`ccd-field ${nameError ? "invalid" : ""}`}>
+          <label htmlFor="ccd-name">
+            Your Name
+            <span className="ccd-counter">
+              {name.length}/{LIMITS.name}
+            </span>
+          </label>
           <input
+            id="ccd-name"
             className="ccd-input"
             placeholder="Enter Your Name"
             value={name}
-            onChange={(e) => onName(e.target.value)}
+            maxLength={LIMITS.name}
+            onChange={(e) => onName(e.target.value.slice(0, LIMITS.name))}
+            onBlur={() => setSeen((s) => ({ ...s, name: true }))}
             autoComplete="name"
+            aria-invalid={!!nameError}
           />
+          {nameError && <div className="ccd-field-error" role="alert">{nameError}</div>}
         </div>
-        <div className="ccd-field">
-          <label>Mobile Number</label>
+        <div className={`ccd-field ${phoneError ? "invalid" : ""}`}>
+          <label htmlFor="ccd-phone">Mobile Number</label>
           <div className="ccd-phone">
             <span className="cc">+91</span>
             <input
+              id="ccd-phone"
               inputMode="numeric"
               placeholder="00000 00000"
               value={phone}
               maxLength={10}
               onChange={(e) => onPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              onBlur={() => setSeen((s) => ({ ...s, phone: true }))}
               autoComplete="tel-national"
+              aria-invalid={!!phoneError}
             />
           </div>
+          {phoneError && <div className="ccd-field-error" role="alert">{phoneError}</div>}
         </div>
         <button className="ccd-btn" type="submit">
           Send OTP
@@ -358,11 +386,22 @@ function OtpView({
   const pretty = identifier.replace(/^(\+91)(\d{5})(\d{5})$/, "$1 $2$3");
 
   function setAt(i: number, v: string) {
-    const d = v.replace(/\D/g, "").slice(-1);
+    const clean = v.replace(/\D/g, "");
+    // A pasted or SMS-autofilled code lands in one box — spread it across the
+    // row. There is no maxLength on the inputs precisely so that the whole code
+    // reaches us here instead of being clipped to one digit by the browser.
+    if (clean.length > 1) {
+      const next = [...digits];
+      for (let k = 0; k < clean.length && i + k < 4; k++) next[i + k] = clean[k];
+      setDigits(next);
+      refs.current[Math.min(3, i + clean.length - 1)]?.focus();
+      return;
+    }
     const next = [...digits];
-    next[i] = d;
+    // Typing over a filled box replaces it rather than appending.
+    next[i] = clean.slice(-1);
     setDigits(next);
-    if (d && i < 3) refs.current[i + 1]?.focus();
+    if (clean && i < 3) refs.current[i + 1]?.focus();
   }
   function onKey(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Backspace" && !digits[i] && i > 0) refs.current[i - 1]?.focus();
@@ -397,9 +436,14 @@ function OtpView({
               }}
               className="ccd-otp-box"
               inputMode="numeric"
-              maxLength={1}
+              autoComplete={i === 0 ? "one-time-code" : "off"}
+              aria-label={`Digit ${i + 1} of 4`}
               value={d}
               onChange={(e) => setAt(i, e.target.value)}
+              onPaste={(e) => {
+                e.preventDefault();
+                setAt(0, e.clipboardData.getData("text"));
+              }}
               onKeyDown={(e) => onKey(i, e)}
               autoFocus={i === 0}
             />
@@ -502,7 +546,15 @@ function DashboardView({
           {current}
         </div>
         <h2>Your Daily Streak</h2>
-        <div className={`ccd-pips ${trackLength > 7 ? "scroll" : ""}`} ref={pipsRef}>
+        {/* A scrollable track needs to be reachable by keyboard, and its
+            scrollbar is hidden, so it says out loud that it scrolls. */}
+        <div
+          className={`ccd-pips ${trackLength > 7 ? "scroll" : ""}`}
+          ref={pipsRef}
+          {...(trackLength > 7
+            ? { tabIndex: 0, role: "group", "aria-label": `Streak track, days 1 to ${trackLength} — scrolls sideways` }
+            : {})}
+        >
           {pips.map((n) => {
             const cls = n <= current ? "done" : n === current + 1 ? "next" : "future";
             const reward = rewardByDay.get(n);

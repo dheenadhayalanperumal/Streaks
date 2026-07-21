@@ -31,6 +31,10 @@ php -S localhost:8080 -t public public/index.php
 
 The API runs at **http://localhost:8080**. Seed admin: `admin@streaks.test` / `admin123`.
 
+Upgrading an existing database rather than creating a fresh one? Apply the
+numbered migrations you have not run yet, e.g.
+`mysql -u root streaks < migrations/006_reward_image_upload.sql`.
+
 ### 2. Frontend
 
 ```bash
@@ -143,6 +147,13 @@ with `mysql -u root streaks < migrations/005_whatsapp.sql`.
 ## Security notes
 
 - Server-side validation of every qualifying action; client streak state is never trusted.
+- Every write endpoint validates its payload through `Streaks\Core\Validate`; the
+  browser forms mirror those rules in `frontend/lib/validation.ts` for fast
+  feedback, but the API never relies on them.
+- Uploaded images (brand logo, reward image) are re-encoded through a canvas in
+  the browser and stored as `data:` URIs, whitelisted to PNG/JPG/WebP/GIF. SVG
+  is deliberately not accepted: it is the one format that would reach the
+  database byte-for-byte, and these images render on the public check-in page.
 - Bearer-token auth on all `/api/admin/*` routes.
 - Idempotency on `/api/action` (per-period + `Idempotency-Key`) prevents replay/double-count.
 - All transitions recorded in `streak_events` for auditability.

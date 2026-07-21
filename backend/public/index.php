@@ -99,7 +99,9 @@ $router->put('/api/admin/campaigns/:id/milestones', $admin(fn($r) => $campaign->
 // ---- Admin: rewards -------------------------------------------------------
 $router->get('/api/admin/rewards', $admin(fn($r) => $reward->index()));
 $router->post('/api/admin/rewards', $admin(fn($r) => $reward->create($r)));
+$router->get('/api/admin/rewards/:id', $admin(fn($r) => $reward->show($r)));
 $router->put('/api/admin/rewards/:id', $admin(fn($r) => $reward->update($r)));
+$router->patch('/api/admin/rewards/:id/active', $admin(fn($r) => $reward->setActive($r)));
 $router->delete('/api/admin/rewards/:id', $admin(fn($r) => $reward->destroy($r)));
 
 // ---- Admin: users ---------------------------------------------------------

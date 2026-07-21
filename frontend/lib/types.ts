@@ -33,7 +33,10 @@ export interface Reward {
   description: string | null;
   type: "coupon" | "points" | "badge" | "custom";
   value: string | null;
-  image: string | null;
+  /** Only present on the single-reward endpoint — the list omits it. */
+  image?: string | null;
+  /** 1 when the row has an image; the list sends this instead of the bytes. */
+  has_image?: number;
   validity_days: number | null;
   active: number;
   issued?: number;

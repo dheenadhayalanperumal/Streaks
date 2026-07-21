@@ -6,18 +6,54 @@ namespace Streaks\Controllers\Admin;
 use Streaks\Core\Database;
 use Streaks\Core\HttpException;
 use Streaks\Core\Request;
+use Streaks\Core\Validate;
 
 final class RewardController
 {
     /** GET /api/admin/rewards */
     public function index(): array
     {
+        // `image` is a LONGTEXT data: URI since uploads replaced URLs — listing
+        // it would put a few hundred KB per row on the wire, and this endpoint
+        // also backs the campaign page's milestone picker, which needs only the
+        // title. A thumbnail flag lets the card show a placeholder; the full
+        // image is fetched with the row when editing.
         return ['rewards' => Database::all(
-            'SELECT r.*,
+            'SELECT r.id, r.title, r.description, r.type, r.value, r.validity_days,
+                    r.active, r.created_at, r.updated_at,
+                    (r.image IS NOT NULL AND r.image <> "") AS has_image,
                     (SELECT COUNT(*) FROM reward_issues ri WHERE ri.reward_id = r.id) AS issued,
                     (SELECT COUNT(*) FROM reward_issues ri WHERE ri.reward_id = r.id AND ri.status = "redeemed") AS redeemed
                FROM rewards r ORDER BY r.id DESC'
         )];
+    }
+
+    /** GET /api/admin/rewards/:id — the full row, including the image. */
+    public function show(Request $req): array
+    {
+        $r = Database::one('SELECT * FROM rewards WHERE id = ?', [(int) $req->params['id']]);
+        if ($r === null) {
+            throw new HttpException(404, 'Reward not found');
+        }
+        return ['reward' => $r];
+    }
+
+    /**
+     * PATCH /api/admin/rewards/:id/active — flip the enabled flag alone.
+     *
+     * Enable/Disable used to round-trip the whole row through validate(), so a
+     * reward stored under older rules could not be toggled at all. Nothing but
+     * `active` is read here, so the operation cannot fail on unrelated fields.
+     */
+    public function setActive(Request $req): array
+    {
+        $id = (int) $req->params['id'];
+        $active = (int) (bool) $req->input('active', true);
+        if (Database::exec('UPDATE rewards SET active = ? WHERE id = ?', [$active, $id]) === 0
+            && Database::one('SELECT id FROM rewards WHERE id = ?', [$id]) === null) {
+            throw new HttpException(404, 'Reward not found');
+        }
+        return ['id' => $id, 'active' => $active];
     }
 
     /** POST /api/admin/rewards */
@@ -62,21 +98,15 @@ final class RewardController
 
     private function validate(Request $req): array
     {
-        $title = trim((string) $req->input('title'));
-        if ($title === '') {
-            throw new HttpException(422, 'title is required');
-        }
-        $type = $req->input('type', 'coupon');
-        if (!in_array($type, ['coupon', 'points', 'badge', 'custom'], true)) {
-            throw new HttpException(422, 'invalid reward type');
-        }
         return [
-            'title'       => $title,
-            'description' => $req->input('description'),
-            'type'        => $type,
-            'value'       => $req->input('value'),
-            'image'       => $req->input('image'),
-            'validity'    => $req->input('validity_days') !== null ? (int) $req->input('validity_days') : null,
+            // Lengths mirror the column widths, not the UI's tighter guidance:
+            // a row stored before this validator existed still has to re-save.
+            'title'       => Validate::requiredString($req->input('title'), 'title', 190),
+            'description' => Validate::optionalString($req->input('description'), 'description', 2000),
+            'type'        => Validate::enum($req->input('type'), 'type', ['coupon', 'points', 'badge', 'custom'], 'coupon'),
+            'value'       => Validate::optionalString($req->input('value'), 'value', 120),
+            'image'       => Validate::image($req->input('image')),
+            'validity'    => Validate::int($req->input('validity_days'), 'validity_days', 0, 3650, true),
             'active'      => (int) (bool) $req->input('active', true),
         ];
     }

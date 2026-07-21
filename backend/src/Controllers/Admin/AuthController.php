@@ -18,6 +18,13 @@ final class AuthController
         if ($email === '' || $password === '') {
             throw new HttpException(422, 'email and password are required');
         }
+        // Only a length bound here. A stricter format check would reject
+        // legitimate stored accounts such as `admin@localhost`, and it would
+        // also return before password_verify() runs — a timing signal that
+        // distinguishes addresses regardless of the status code.
+        if (mb_strlen($email) > 190) {
+            throw new HttpException(401, 'Invalid credentials');
+        }
         return Auth::login($email, $password);
     }
 

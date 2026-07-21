@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace Streaks\Controllers\Admin;
 
 use Streaks\Core\Database;
-use Streaks\Core\HttpException;
 use Streaks\Core\Request;
+use Streaks\Core\Validate;
 
 /**
  * Brand profile settings — a single editable row (id = 1) that drives the
@@ -49,27 +49,11 @@ final class SettingsController
 
     private function validate(Request $req): array
     {
-        $name = trim((string) $req->input('brand_name'));
-        if ($name === '') {
-            throw new HttpException(422, 'brand_name is required');
-        }
-
-        $color = trim((string) $req->input('theme_color', '#ef5a7f'));
-        if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
-            throw new HttpException(422, 'theme_color must be a 6-digit hex color (e.g. #ef5a7f)');
-        }
-
-        $logo = $req->input('logo');
-        $logo = ($logo === null || trim((string) $logo) === '') ? null : (string) $logo;
-
-        $tagline = $req->input('tagline');
-        $tagline = ($tagline === null || trim((string) $tagline) === '') ? null : trim((string) $tagline);
-
         return [
-            'brand_name'  => $name,
-            'tagline'     => $tagline,
-            'logo'        => $logo,
-            'theme_color' => strtolower($color),
+            'brand_name'  => Validate::brandName($req->input('brand_name')),
+            'tagline'     => Validate::optionalString($req->input('tagline'), 'tagline', 120),
+            'logo'        => Validate::image($req->input('logo'), 'logo'),
+            'theme_color' => Validate::hexColor($req->input('theme_color'), 'theme_color', '#ef5a7f'),
         ];
     }
 }

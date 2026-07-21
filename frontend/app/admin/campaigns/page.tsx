@@ -1,9 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { Campaign, Reward, Milestone } from "@/lib/types";
-import { Topbar, Modal, TypePill } from "../../components";
+import { Topbar, Modal, TypePill, Field, focusFirstInvalid } from "../../components";
+import {
+  LIMITS,
+  type Errors,
+  dateOrder,
+  hasErrors,
+  intValue,
+  isoDate,
+  maxLen,
+  numValue,
+  required,
+  timezone as validTimezone,
+} from "@/lib/validation";
 
 interface Draft {
   name: string;
@@ -30,6 +42,38 @@ const emptyDraft: Draft = {
   geofence_radius_m: null, geofence_enabled: false, milestones: [],
 };
 
+function validate(d: Draft): Errors {
+  // A milestone set is only usable when every row has a day and a reward, and
+  // no two rows fight over the same day.
+  const days = d.milestones.map((m) => m.streak_count);
+  const milestoneError =
+    d.milestones.some((m) => !Number.isInteger(m.streak_count) || m.streak_count < 1 || m.streak_count > 3650)
+      ? "Every milestone needs a day between 1 and 3650."
+      : d.milestones.some((m) => !m.reward_id)
+        ? "Every milestone needs a reward."
+        : new Set(days).size !== days.length
+          ? "Two milestones share the same day — each day can unlock one reward."
+          : null;
+
+  return {
+    name: required("Name", d.name) || maxLen("Name", d.name, LIMITS.campaignName),
+    description: maxLen("Description", d.description, LIMITS.description),
+    custom_period_days:
+      d.type === "custom" ? intValue("Custom period", d.custom_period_days, 1, 3650) : null,
+    // Optional here to match the API, which defaults a blank to "check_in".
+    qualifying_action: maxLen("Qualifying action", d.qualifying_action, LIMITS.qualifyingAction),
+    timezone: validTimezone(d.timezone),
+    start_date: isoDate(d.start_date, "Start date"),
+    end_date: isoDate(d.end_date, "End date") || dateOrder(d.start_date, d.end_date),
+    latitude: d.geofence_enabled ? numValue("Latitude", d.latitude, -90, 90) : null,
+    longitude: d.geofence_enabled ? numValue("Longitude", d.longitude, -180, 180) : null,
+    geofence_radius_m: d.geofence_enabled
+      ? intValue("Radius", d.geofence_radius_m, 1, 100000)
+      : null,
+    milestones: milestoneError,
+  };
+}
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
@@ -39,6 +83,10 @@ export default function CampaignsPage() {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState(false);
+
+  const errors = useMemo(() => validate(draft), [draft]);
+  const invalid = hasErrors(errors);
 
   async function load() {
     const [c, r] = await Promise.all([
@@ -55,6 +103,7 @@ export default function CampaignsPage() {
     setEditId(null);
     setDraft(emptyDraft);
     setError("");
+    setTouched(false);
     setOpen(true);
   }
 
@@ -79,6 +128,7 @@ export default function CampaignsPage() {
       milestones: (campaign.milestones || []).map((m) => ({ streak_count: m.streak_count, reward_id: m.reward_id })),
     });
     setError("");
+    setTouched(false);
     setOpen(true);
   }
 
@@ -99,15 +149,21 @@ export default function CampaignsPage() {
   }
 
   async function save() {
+    setTouched(true);
     setError("");
-    if (draft.geofence_enabled && (draft.latitude == null || draft.longitude == null || !draft.geofence_radius_m)) {
-      setError("Geofence is required for this campaign — set latitude, longitude and radius, or turn geofencing off.");
+    if (invalid) {
+      setError("Fix the highlighted fields before saving.");
+      focusFirstInvalid();
       return;
     }
     setSaving(true);
     try {
       const payload = {
         ...draft,
+        name: draft.name.trim(),
+        description: draft.description.trim(),
+        qualifying_action: draft.qualifying_action.trim(),
+        timezone: draft.timezone.trim(),
         custom_period_days: draft.type === "custom" ? draft.custom_period_days : null,
         start_date: draft.start_date || null,
         end_date: draft.end_date || null,
@@ -186,46 +242,45 @@ export default function CampaignsPage() {
         <Modal
           title={editId ? "Edit Campaign" : "New Campaign"}
           onClose={() => setOpen(false)}
+          onSubmit={save}
           footer={
             <>
-              <button className="btn ghost" onClick={() => setOpen(false)}>Cancel</button>
-              <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save Campaign"}</button>
+              <button className="btn ghost" type="button" onClick={() => setOpen(false)}>Cancel</button>
+              <button className="btn primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save Campaign"}</button>
             </>
           }
         >
           {error && <div className="error-banner">{error}</div>}
-          <div className="field">
-            <label>Name</label>
-            <input className="input" value={draft.name} onChange={(e) => up("name", e.target.value)} placeholder="Daily Check-in" />
-          </div>
-          <div className="field">
-            <label>Description</label>
-            <textarea className="input" value={draft.description} onChange={(e) => up("description", e.target.value)} />
-          </div>
+          <Field label="Name" required error={errors.name} touched={touched} counter={`${draft.name.length}/${LIMITS.campaignName}`}>
+            <input className="input" value={draft.name} maxLength={LIMITS.campaignName}
+              onChange={(e) => up("name", e.target.value)} placeholder="Daily Check-in" />
+          </Field>
+          <Field label="Description" error={errors.description} touched={touched}
+            counter={`${draft.description.length}/${LIMITS.description}`}>
+            <textarea className="input" value={draft.description} maxLength={LIMITS.description}
+              onChange={(e) => up("description", e.target.value)} />
+          </Field>
           <div className="row2">
-            <div className="field">
-              <label>Campaign Type (cadence)</label>
+            <Field label="Campaign Type (cadence)">
               <select className="input" value={draft.type} onChange={(e) => up("type", e.target.value as Campaign["type"])}>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
                 <option value="custom">Custom</option>
               </select>
-            </div>
-            <div className="field">
-              <label>Missed Day Behaviour</label>
+            </Field>
+            <Field label="Missed Day Behaviour">
               <select className="input" value={draft.missed_day_behaviour} onChange={(e) => up("missed_day_behaviour", e.target.value as Campaign["missed_day_behaviour"])}>
                 <option value="break">Break Streak</option>
                 <option value="no_break">Do Not Break (grace)</option>
               </select>
-            </div>
+            </Field>
           </div>
           {draft.type === "custom" && (
-            <div className="field">
-              <label>Custom Period (days)</label>
-              <input className="input" type="number" min={1} value={draft.custom_period_days}
+            <Field label="Custom Period (days)" error={errors.custom_period_days} touched={touched}>
+              <input className="input" type="number" min={1} max={3650} value={draft.custom_period_days}
                 onChange={(e) => up("custom_period_days", Number(e.target.value))} />
-            </div>
+            </Field>
           )}
           <div className="field">
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -240,34 +295,42 @@ export default function CampaignsPage() {
             </div>
             {draft.geofence_enabled && (
               <div className="row3" style={{ marginTop: 10 }}>
-                <input className="input" placeholder="Latitude" type="number" value={draft.latitude ?? ""}
-                  onChange={(e) => up("latitude", e.target.value ? Number(e.target.value) : null)} />
-                <input className="input" placeholder="Longitude" type="number" value={draft.longitude ?? ""}
-                  onChange={(e) => up("longitude", e.target.value ? Number(e.target.value) : null)} />
-                <input className="input" placeholder="Radius (m)" type="number" min={1} value={draft.geofence_radius_m ?? ""}
-                  onChange={(e) => up("geofence_radius_m", e.target.value ? Number(e.target.value) : null)} />
+                <Field label="Latitude" error={errors.latitude} touched={touched}>
+                  <input className="input" placeholder="-90 to 90" type="number" step="any" min={-90} max={90}
+                    value={draft.latitude ?? ""}
+                    onChange={(e) => up("latitude", e.target.value === "" ? null : Number(e.target.value))} />
+                </Field>
+                <Field label="Longitude" error={errors.longitude} touched={touched}>
+                  <input className="input" placeholder="-180 to 180" type="number" step="any" min={-180} max={180}
+                    value={draft.longitude ?? ""}
+                    onChange={(e) => up("longitude", e.target.value === "" ? null : Number(e.target.value))} />
+                </Field>
+                <Field label="Radius (m)" error={errors.geofence_radius_m} touched={touched}>
+                  <input className="input" placeholder="1 to 100000" type="number" min={1} max={100000}
+                    value={draft.geofence_radius_m ?? ""}
+                    onChange={(e) => up("geofence_radius_m", e.target.value === "" ? null : Number(e.target.value))} />
+                </Field>
               </div>
             )}
           </div>
           <div className="row2">
-            <div className="field">
-              <label>Qualifying Action</label>
-              <input className="input" value={draft.qualifying_action} onChange={(e) => up("qualifying_action", e.target.value)} placeholder="check_in" />
-            </div>
-            <div className="field">
-              <label>Timezone</label>
-              <input className="input" value={draft.timezone} onChange={(e) => up("timezone", e.target.value)} placeholder="Asia/Kolkata" />
-            </div>
+            <Field label="Qualifying Action" error={errors.qualifying_action} touched={touched}>
+              <input className="input" value={draft.qualifying_action} maxLength={LIMITS.qualifyingAction}
+                onChange={(e) => up("qualifying_action", e.target.value)} placeholder="check_in" />
+            </Field>
+            <Field label="Timezone" error={errors.timezone} touched={touched} hint="IANA zone, e.g. Asia/Kolkata">
+              <input className="input" value={draft.timezone} maxLength={LIMITS.timezone}
+                onChange={(e) => up("timezone", e.target.value)} placeholder="Asia/Kolkata" />
+            </Field>
           </div>
           <div className="row2">
-            <div className="field">
-              <label>Start Date</label>
+            <Field label="Start Date" error={errors.start_date} touched={touched}>
               <input className="input" type="date" value={draft.start_date} onChange={(e) => up("start_date", e.target.value)} />
-            </div>
-            <div className="field">
-              <label>End Date</label>
-              <input className="input" type="date" value={draft.end_date} onChange={(e) => up("end_date", e.target.value)} />
-            </div>
+            </Field>
+            <Field label="End Date" error={errors.end_date} touched={touched}>
+              <input className="input" type="date" min={draft.start_date || undefined}
+                value={draft.end_date} onChange={(e) => up("end_date", e.target.value)} />
+            </Field>
           </div>
           <div className="field">
             <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -276,22 +339,30 @@ export default function CampaignsPage() {
             <div className="muted">Cadence: {cadenceHint}</div>
           </div>
 
-          <div className="field">
-            <label>Milestone Rewards (streak count → reward)</label>
-            {draft.milestones.map((m, i) => (
-              <div className="flex" key={i} style={{ marginBottom: 8 }}>
-                <input className="input" type="number" min={1} style={{ width: 110 }} placeholder="Day"
-                  value={m.streak_count || ""} onChange={(e) => setMilestone(i, "streak_count", Number(e.target.value))} />
-                <select className="input" value={m.reward_id} onChange={(e) => setMilestone(i, "reward_id", Number(e.target.value))}>
-                  {rewards.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
-                </select>
-                <button className="btn sm danger" onClick={() => removeMilestone(i)}>×</button>
-              </div>
-            ))}
-            <button className="btn sm ghost" onClick={addMilestone} disabled={rewards.length === 0}>
-              {rewards.length === 0 ? "Create a reward first" : "+ Add milestone"}
-            </button>
-          </div>
+          <Field
+            label="Milestone Rewards (streak count → reward)"
+            error={errors.milestones}
+            touched={touched}
+            hint="Each day can unlock one reward."
+          >
+            <div>
+              {draft.milestones.map((m, i) => (
+                <div className="flex" key={i} style={{ marginBottom: 8 }}>
+                  <input className="input" type="number" min={1} max={3650} style={{ width: 110 }} placeholder="Day"
+                    aria-label={`Milestone ${i + 1} day`}
+                    value={m.streak_count || ""} onChange={(e) => setMilestone(i, "streak_count", Number(e.target.value))} />
+                  <select className="input" aria-label={`Milestone ${i + 1} reward`} value={m.reward_id}
+                    onChange={(e) => setMilestone(i, "reward_id", Number(e.target.value))}>
+                    {rewards.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
+                  </select>
+                  <button className="btn sm danger" type="button" aria-label={`Remove milestone ${i + 1}`} onClick={() => removeMilestone(i)}>×</button>
+                </div>
+              ))}
+              <button className="btn sm ghost" type="button" onClick={addMilestone} disabled={rewards.length === 0}>
+                {rewards.length === 0 ? "Create a reward first" : "+ Add milestone"}
+              </button>
+            </div>
+          </Field>
         </Modal>
       )}
     </>

@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { WaTemplate, BrandProfile } from "@/lib/types";
 import { TOKENS, renderPreview } from "@/lib/wa";
-import { Topbar, Modal } from "../../components";
+import { Topbar, Modal, Field, focusFirstInvalid } from "../../components";
+import { LIMITS, type Errors, hasErrors, maxLen, required, templateName } from "@/lib/validation";
 
 interface Draft {
   name: string;
   body: string;
 }
 const empty: Draft = { name: "", body: "" };
+
+function validate(d: Draft): Errors {
+  return {
+    name: templateName(d.name),
+    body: required("Body", d.body) || maxLen("Body", d.body, LIMITS.templateBody),
+  };
+}
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<WaTemplate[]>([]);
@@ -21,6 +29,10 @@ export default function TemplatesPage() {
   const [draft, setDraft] = useState<Draft>(empty);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [touched, setTouched] = useState(false);
+
+  const errors = useMemo(() => validate(draft), [draft]);
+  const invalid = hasErrors(errors);
 
   async function load() {
     const [t, b] = await Promise.all([
@@ -39,12 +51,14 @@ export default function TemplatesPage() {
     setEditId(null);
     setDraft(empty);
     setError("");
+    setTouched(false);
     setOpen(true);
   }
   function openEdit(t: WaTemplate) {
     setEditId(t.id);
     setDraft({ name: t.name, body: t.body });
     setError("");
+    setTouched(false);
     setOpen(true);
   }
 
@@ -53,11 +67,18 @@ export default function TemplatesPage() {
   }
 
   async function save() {
+    setTouched(true);
+    if (invalid) {
+      setError("Fix the highlighted fields before saving.");
+      focusFirstInvalid();
+      return;
+    }
     setSaving(true);
     setError("");
     try {
-      if (editId) await api.put(`/api/admin/whatsapp/templates/${editId}`, draft);
-      else await api.post("/api/admin/whatsapp/templates", draft);
+      const payload = { name: draft.name.trim(), body: draft.body.trim() };
+      if (editId) await api.put(`/api/admin/whatsapp/templates/${editId}`, payload);
+      else await api.post("/api/admin/whatsapp/templates", payload);
       setOpen(false);
       await load();
     } catch (err) {
@@ -112,38 +133,52 @@ export default function TemplatesPage() {
         <Modal
           title={editId ? "Edit Template" : "New Template"}
           onClose={() => setOpen(false)}
+          onSubmit={save}
           footer={
             <>
-              <button className="btn ghost" onClick={() => setOpen(false)}>Cancel</button>
-              <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save Template"}</button>
+              <button className="btn ghost" type="button" onClick={() => setOpen(false)}>Cancel</button>
+              <button className="btn primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save Template"}</button>
             </>
           }
         >
           {error && <div className="error-banner">{error}</div>}
-          <div className="field">
-            <label>Name <span className="muted">(spaces become underscores, lowercased)</span></label>
-            <input className="input" value={draft.name} placeholder="streak_reward" onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} />
-          </div>
-          <div className="field">
-            <label>Body <span className="muted">({draft.body.length}/1024)</span></label>
-            <textarea
+          <Field
+            label="Name"
+            required
+            error={errors.name}
+            touched={touched}
+            hint="Spaces become underscores, lowercased."
+            counter={`${draft.name.length}/${LIMITS.templateName}`}
+          >
+            <input
               className="input"
-              rows={5}
-              maxLength={1024}
-              value={draft.body}
-              placeholder="Hey [Name]! You unlocked [Prize]. Use code [CODE]…"
-              onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
+              value={draft.name}
+              maxLength={LIMITS.templateName}
+              placeholder="streak_reward"
+              onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
             />
-            <div className="flex" style={{ gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-              {TOKENS.map((tok) => (
-                <button key={tok} type="button" className="btn sm ghost" style={{ fontFamily: "monospace" }} onClick={() => insertToken(tok)}>
-                  {tok}
-                </button>
-              ))}
+          </Field>
+          <Field label="Body" required error={errors.body} touched={touched} counter={`${draft.body.length}/${LIMITS.templateBody}`}>
+            <div>
+              <textarea
+                className="input"
+                rows={5}
+                maxLength={LIMITS.templateBody}
+                value={draft.body}
+                placeholder="Hey [Name]! You unlocked [Prize]. Use code [CODE]…"
+                onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
+              />
+              <div className="flex" style={{ gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                {TOKENS.map((tok) => (
+                  <button key={tok} type="button" className="btn sm ghost" style={{ fontFamily: "monospace" }} onClick={() => insertToken(tok)}>
+                    {tok}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          </Field>
           <div className="field">
-            <label>Preview</label>
+            <span className="field-label">Preview</span>
             <div
               style={{
                 fontSize: 13,

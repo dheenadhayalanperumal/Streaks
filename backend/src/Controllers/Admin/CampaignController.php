@@ -6,6 +6,7 @@ namespace Streaks\Controllers\Admin;
 use Streaks\Core\Database;
 use Streaks\Core\HttpException;
 use Streaks\Core\Request;
+use Streaks\Core\Validate;
 
 final class CampaignController
 {
@@ -110,16 +111,27 @@ final class CampaignController
             throw new HttpException(422, 'milestones must be an array');
         }
 
+        // Validate the whole set before touching the table — a half-applied
+        // milestone list would silently change what a live campaign pays out.
+        $rows = [];
+        foreach ($list as $i => $m) {
+            $label = 'milestone ' . ((int) $i + 1);
+            $count  = Validate::int($m['streak_count'] ?? null, "$label day", 1, 3650);
+            $reward = Validate::int($m['reward_id'] ?? null, "$label reward_id", 1, 4294967295);
+            if (isset($rows[$count])) {
+                throw new HttpException(422, "two milestones share day $count — each day can unlock one reward");
+            }
+            if (Database::one('SELECT id FROM rewards WHERE id = ?', [$reward]) === null) {
+                throw new HttpException(422, "$label points at a reward that no longer exists");
+            }
+            $rows[$count] = $reward;
+        }
+
         $pdo = Database::pdo();
         $pdo->beginTransaction();
         try {
             Database::exec('DELETE FROM milestones WHERE campaign_id = ?', [$id]);
-            foreach ($list as $m) {
-                $count = (int) ($m['streak_count'] ?? 0);
-                $reward = (int) ($m['reward_id'] ?? 0);
-                if ($count < 1 || $reward < 1) {
-                    continue;
-                }
+            foreach ($rows as $count => $reward) {
                 Database::insert(
                     'INSERT INTO milestones (campaign_id, streak_count, reward_id) VALUES (?, ?, ?)',
                     [$id, $count, $reward]
@@ -135,58 +147,43 @@ final class CampaignController
 
     private function validate(Request $req): array
     {
-        $name = trim((string) $req->input('name'));
-        if ($name === '') {
-            throw new HttpException(422, 'name is required');
-        }
-        $type = $req->input('type', 'daily');
-        if (!in_array($type, ['daily', 'weekly', 'monthly', 'custom'], true)) {
-            throw new HttpException(422, 'invalid type');
-        }
-        $behaviour = $req->input('missed_day_behaviour', 'break');
-        if (!in_array($behaviour, ['break', 'no_break'], true)) {
-            throw new HttpException(422, 'invalid missed_day_behaviour');
-        }
-        $custom = $type === 'custom' ? (int) $req->input('custom_period_days', 1) : null;
-        if ($type === 'custom' && $custom < 1) {
-            throw new HttpException(422, 'custom_period_days must be >= 1 for custom campaigns');
-        }
-        $lat = $req->input('latitude');
-        $lng = $req->input('longitude');
-        $radius = $req->input('geofence_radius_m');
-        // Use is_numeric (not truthiness) so a valid coordinate of exactly 0 is kept.
-        $hasLat = $lat !== null && $lat !== '';
-        $hasLng = $lng !== null && $lng !== '';
-        $hasRadius = $radius !== null && $radius !== '';
-        if ($hasLat && !is_numeric($lat)) {
-            throw new HttpException(422, 'invalid latitude');
-        }
-        if ($hasLng && !is_numeric($lng)) {
-            throw new HttpException(422, 'invalid longitude');
-        }
-        if ($hasRadius && (!is_numeric($radius) || (int) $radius < 1)) {
-            throw new HttpException(422, 'invalid geofence_radius_m');
-        }
+        $type = Validate::enum($req->input('type'), 'type', ['daily', 'weekly', 'monthly', 'custom'], 'daily');
+        $custom = $type === 'custom'
+            ? Validate::int($req->input('custom_period_days'), 'custom_period_days', 1, 3650)
+            : null;
+
+        $lat    = Validate::float($req->input('latitude'), 'latitude', -90, 90, true);
+        $lng    = Validate::float($req->input('longitude'), 'longitude', -180, 180, true);
+        // Floor of 1, not 10 — small indoor geofences were legal before this.
+        $radius = Validate::int($req->input('geofence_radius_m'), 'geofence_radius_m', 1, 100000, true);
 
         $geoEnabled = (bool) $req->input('geofence_enabled', false);
-        if ($geoEnabled && !($hasLat && $hasLng && $hasRadius)) {
+        if ($geoEnabled && ($lat === null || $lng === null || $radius === null)) {
             throw new HttpException(422, 'latitude, longitude and geofence_radius_m are required when geofence is enabled');
         }
 
+        $start = Validate::date($req->input('start_date'), 'start_date');
+        $end   = Validate::date($req->input('end_date'), 'end_date');
+        if ($start !== null && $end !== null && $end < $start) {
+            throw new HttpException(422, 'end_date must be on or after start_date');
+        }
+
         return [
-            'name'        => $name,
-            'description' => $req->input('description'),
+            // Lengths mirror the column widths, not the UI's tighter guidance:
+            // a row stored before this validator existed still has to re-save.
+            'name'        => Validate::requiredString($req->input('name'), 'name', 190),
+            'description' => Validate::optionalString($req->input('description'), 'description', 2000),
             'type'        => $type,
             'custom'      => $custom,
-            'behaviour'   => $behaviour,
-            'action'      => $req->input('qualifying_action', 'check_in'),
-            'tz'          => $req->input('timezone', 'UTC'),
-            'start'       => $req->input('start_date') ?: null,
-            'end'         => $req->input('end_date') ?: null,
+            'behaviour'   => Validate::enum($req->input('missed_day_behaviour'), 'missed_day_behaviour', ['break', 'no_break'], 'break'),
+            'action'      => Validate::optionalString($req->input('qualifying_action'), 'qualifying_action', 120) ?? 'check_in',
+            'tz'          => Validate::timezone($req->input('timezone')),
+            'start'       => $start,
+            'end'         => $end,
             'active'      => (int) (bool) $req->input('active', true),
-            'lat'         => $hasLat ? (float) $lat : null,
-            'lng'         => $hasLng ? (float) $lng : null,
-            'radius'      => $hasRadius ? (int) $radius : null,
+            'lat'         => $lat,
+            'lng'         => $lng,
+            'radius'      => $radius,
             'geo_enabled' => (int) $geoEnabled,
         ];
     }

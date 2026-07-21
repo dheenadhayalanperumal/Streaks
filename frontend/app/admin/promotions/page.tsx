@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { WaTemplate, WaStatus, WaRecipient, BroadcastResult, BrandProfile } from "@/lib/types";
 import { SEGMENTS, renderPreview } from "@/lib/wa";
-import { Topbar } from "../../components";
+import { Topbar, Field, focusFirstInvalid } from "../../components";
+import { LIMITS, maxLen, required } from "@/lib/validation";
 
 export default function PromotionsPage() {
   const [templates, setTemplates] = useState<WaTemplate[]>([]);
@@ -20,6 +21,12 @@ export default function PromotionsPage() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<BroadcastResult | null>(null);
   const [error, setError] = useState("");
+  const [touched, setTouched] = useState(false);
+
+  const messageError = useMemo(
+    () => required("Message", message) || maxLen("Message", message, LIMITS.templateBody),
+    [message],
+  );
 
   async function load() {
     const [t, st, b] = await Promise.all([
@@ -59,8 +66,18 @@ export default function PromotionsPage() {
   }
 
   async function send() {
+    setTouched(true);
+    if (messageError) {
+      setError(messageError);
+      focusFirstInvalid();
+      return;
+    }
     if (!status?.enabled) {
       setError("WhatsApp delivery is disabled. Enable it on the WhatsApp page first.");
+      return;
+    }
+    if (recipients.length === 0) {
+      setError("This segment has no reachable recipients.");
       return;
     }
     if (!confirm(`Send this promotion to ${recipients.length} recipient(s) in the "${segment}" segment?`)) return;
@@ -86,7 +103,7 @@ export default function PromotionsPage() {
         title="Promotion Messages"
         sub="Broadcast a template to an audience segment over WhatsApp"
         action={
-          <button className="btn primary" onClick={send} disabled={sending || loading || !message.trim()}>
+          <button className="btn primary" onClick={send} disabled={sending || loading}>
             {sending ? "Sending…" : `Send to ${recipients.length}`}
           </button>
         }
@@ -128,7 +145,7 @@ export default function PromotionsPage() {
 
                 <div className="field">
                   <label>Start from template</label>
-                  <select className="input" defaultValue="" onChange={(e) => pickTemplate(e.target.value)}>
+                  <select className="input" aria-label="Start from template" defaultValue="" onChange={(e) => pickTemplate(e.target.value)}>
                     <option value="" disabled>Choose a template…</option>
                     {templates.map((t) => (
                       <option key={t.id} value={t.name}>{t.name}</option>
@@ -136,20 +153,26 @@ export default function PromotionsPage() {
                   </select>
                 </div>
 
-                <div className="field">
-                  <label>Message <span className="muted">({message.length}/1024)</span></label>
+                <Field
+                  label="Message"
+                  required
+                  error={messageError}
+                  touched={touched}
+                  counter={`${message.length}/${LIMITS.templateBody}`}
+                >
                   <textarea
                     className="input"
                     rows={6}
-                    maxLength={1024}
+                    maxLength={LIMITS.templateBody}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
+                    onBlur={() => setTouched(true)}
                     placeholder="Hi [Name]! …"
                   />
-                </div>
+                </Field>
 
                 <div className="field">
-                  <label>Preview</label>
+                  <span className="field-label">Preview</span>
                   <div
                     style={{
                       fontSize: 13,

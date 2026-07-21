@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { api, timeAgo } from "@/lib/api";
 import type { UserRow } from "@/lib/types";
-import { Topbar, Modal, Avatar, TypePill } from "../../components";
+import { Topbar, Modal, Avatar, TypePill, Field } from "../../components";
+import { intRange } from "@/lib/validation";
 
 interface UserDetail {
   id: number;
@@ -24,6 +25,12 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<UserDetail | null>(null);
 
+  const [adjusting, setAdjusting] = useState<{ enrollmentId: number; campaign: string } | null>(null);
+  const [adjustValue, setAdjustValue] = useState("0");
+  const [adjustApiError, setAdjustApiError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const adjustError = intRange("Streak count", adjustValue, 0, 3650);
+
   async function load() {
     const r = await api.get<{ users: UserRow[] }>(`/api/admin/users?search=${encodeURIComponent(search)}`);
     setUsers(r.users);
@@ -36,12 +43,25 @@ export default function UsersPage() {
     setDetail(r.user);
   }
 
-  async function adjust(enrollmentId: number, current: number) {
-    const val = prompt("Set current streak count to:", String(current));
-    if (val === null) return;
-    await api.post(`/api/admin/users/${detail!.id}/adjust-streak`, { enrollment_id: enrollmentId, current_count: Number(val) });
-    await openUser(detail!.id);
-    await load();
+  // Adjusting a streak rewrites a participant's earned progress, so it gets a
+  // real form rather than a native prompt(): the value can be corrected in
+  // place instead of retyped from scratch after a rejection.
+  async function saveAdjust() {
+    if (!adjusting || adjustError) return;
+    setBusy(true);
+    try {
+      await api.post(`/api/admin/users/${detail!.id}/adjust-streak`, {
+        enrollment_id: adjusting.enrollmentId,
+        current_count: Number(adjustValue.trim()),
+      });
+      setAdjusting(null);
+      await openUser(detail!.id);
+      await load();
+    } catch (err) {
+      setAdjustApiError(err instanceof Error ? err.message : "Could not adjust the streak");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function updateReward(id: number, status: string) {
@@ -52,7 +72,7 @@ export default function UsersPage() {
   return (
     <>
       <Topbar title="Users" sub="Every participant, their streaks & reward history"
-        action={<div className="search"><input className="input" placeholder="Search name or identifier…" value={search} onChange={(e) => setSearch(e.target.value)} /></div>} />
+        action={<div className="search"><input className="input" type="search" aria-label="Search users" maxLength={190} placeholder="Search name or identifier…" value={search} onChange={(e) => setSearch(e.target.value)} /></div>} />
       <div className="content">
         {loading ? <div className="loading">Loading…</div> : (
           <div className="table-wrap">
@@ -99,7 +119,16 @@ export default function UsersPage() {
                     <div style={{ fontWeight: 600 }}>{e.campaign_name} <TypePill type={e.type} /></div>
                     <div className="muted">Current {e.current_count} · Longest {e.longest_count} · Missed {e.missed_count} · <TypePill type={e.status} /></div>
                   </div>
-                  <button className="btn sm ghost" onClick={() => adjust(e.enrollment_id, e.current_count)}>Adjust</button>
+                  <button
+                    className="btn sm ghost"
+                    onClick={() => {
+                      setAdjusting({ enrollmentId: e.enrollment_id, campaign: e.campaign_name });
+                      setAdjustValue(String(e.current_count));
+                      setAdjustApiError("");
+                    }}
+                  >
+                    Adjust
+                  </button>
                 </div>
               </div>
             ))}
@@ -132,6 +161,38 @@ export default function UsersPage() {
             ))}
             {detail.timeline.length === 0 && <div className="muted">No events</div>}
           </div>
+        </Modal>
+      )}
+
+      {adjusting && (
+        <Modal
+          title="Adjust streak"
+          onClose={() => setAdjusting(null)}
+          onSubmit={saveAdjust}
+          footer={
+            <>
+              <button className="btn ghost" type="button" onClick={() => setAdjusting(null)}>Cancel</button>
+              <button className="btn primary" type="submit" disabled={busy}>
+                {busy ? "Saving…" : "Set streak"}
+              </button>
+            </>
+          }
+        >
+          {adjustApiError && <div className="error-banner" role="alert">{adjustApiError}</div>}
+          <p className="muted" style={{ marginBottom: 14 }}>
+            Overwrites the participant&apos;s current streak on <b>{adjusting.campaign}</b>.
+            The change is recorded in their timeline.
+          </p>
+          <Field label="Current streak count" required error={adjustError} touched={false}>
+            <input
+              className="input"
+              type="number"
+              min={0}
+              max={3650}
+              value={adjustValue}
+              onChange={(e) => setAdjustValue(e.target.value)}
+            />
+          </Field>
         </Modal>
       )}
     </>

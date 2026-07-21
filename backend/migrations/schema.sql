@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS rewards (
   description   TEXT          NULL,
   type          ENUM('coupon','points','badge','custom') NOT NULL DEFAULT 'coupon',
   value         VARCHAR(120)  NULL,          -- e.g. "10%", "500", badge slug
-  image         VARCHAR(500)  NULL,
+  image         LONGTEXT      NULL,          -- uploaded image as a data: URI, or an http(s) URL
   validity_days INT UNSIGNED  NULL,          -- reward expires this many days after issue
   active        TINYINT(1)    NOT NULL DEFAULT 1,
   created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,

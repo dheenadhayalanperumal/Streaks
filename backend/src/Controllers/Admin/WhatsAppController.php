@@ -6,6 +6,7 @@ namespace Streaks\Controllers\Admin;
 use Streaks\Core\Database;
 use Streaks\Core\HttpException;
 use Streaks\Core\Request;
+use Streaks\Core\Validate;
 use Streaks\Services\WhatsApp;
 
 /**
@@ -55,8 +56,10 @@ final class WhatsAppController
         $name = trim((string) $req->input('wa_template_name', WhatsApp::DEFAULT_TEMPLATE_NAME));
         $name = $name === '' ? WhatsApp::DEFAULT_TEMPLATE_NAME : self::normalizeName($name);
 
-        $phoneId = $req->input('wa_phone_number_id');
-        $phoneId = ($phoneId === null || trim((string) $phoneId) === '') ? null : trim((string) $phoneId);
+        $phoneId = Validate::optionalString($req->input('wa_phone_number_id'), 'wa_phone_number_id', 40);
+        if ($phoneId !== null && !preg_match('/^\d+$/', $phoneId)) {
+            throw new HttpException(422, 'wa_phone_number_id must contain digits only');
+        }
 
         $body = $req->input('wa_template_body');
         $body = ($body === null || trim((string) $body) === '') ? null : (string) $body;
@@ -141,7 +144,7 @@ final class WhatsAppController
     /** POST /api/admin/whatsapp/optouts  { mobile } */
     public function addOptOut(Request $req): array
     {
-        $key = WhatsApp::optOutKey((string) $req->input('mobile'));
+        $key = WhatsApp::optOutKey(Validate::anyMobile($req->input('mobile')));
         if ($key === '') {
             throw new HttpException(422, 'A valid mobile number is required');
         }
@@ -210,15 +213,12 @@ final class WhatsAppController
     public function test(Request $req): array
     {
         $s = self::settings();
-        $mobile = trim((string) $req->input('mobile'));
-        if ($mobile === '') {
-            throw new HttpException(422, 'A mobile number is required');
-        }
+        $mobile = Validate::anyMobile($req->input('mobile'));
         if (in_array(WhatsApp::optOutKey($mobile), self::optOutSet(), true)) {
             return ['result' => ['status' => 'opted-out', 'text' => '']];
         }
 
-        $name = trim((string) $req->input('name')) ?: 'there';
+        $name = Validate::optionalPersonName($req->input('name')) ?? 'there';
         $business = self::brandName();
         $vars = [
             'name'     => $name,

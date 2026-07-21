@@ -61,11 +61,12 @@ final class Auth
 
         $identifier = $req->header('X-User-Identifier') ?? $req->input('identifier');
         if ($identifier) {
+            $identifier = Validate::identifier($identifier);
             $u = Database::one('SELECT * FROM users WHERE identifier = ?', [$identifier]);
             if ($u === null && $create) {
                 $newId = Database::insert(
                     'INSERT INTO users (name, identifier) VALUES (?, ?)',
-                    [$req->input('name'), $identifier]
+                    [Validate::optionalPersonName($req->input('name')), $identifier]
                 );
                 $u = Database::one('SELECT * FROM users WHERE id = ?', [$newId]);
             }

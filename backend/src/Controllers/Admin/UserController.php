@@ -6,6 +6,7 @@ namespace Streaks\Controllers\Admin;
 use Streaks\Core\Database;
 use Streaks\Core\HttpException;
 use Streaks\Core\Request;
+use Streaks\Core\Validate;
 use Streaks\Services\StreakEngine;
 
 final class UserController
@@ -82,8 +83,8 @@ final class UserController
     /** POST /api/admin/users/:id/adjust-streak  { enrollment_id, current_count } */
     public function adjustStreak(Request $req): array
     {
-        $enrollmentId = (int) $req->input('enrollment_id');
-        $count = max(0, (int) $req->input('current_count'));
+        $enrollmentId = Validate::int($req->input('enrollment_id'), 'enrollment_id', 1, 4294967295);
+        $count = Validate::int($req->input('current_count'), 'current_count', 0, 3650);
 
         $streak = Database::one('SELECT * FROM streaks WHERE enrollment_id = ?', [$enrollmentId]);
         if ($streak === null) {

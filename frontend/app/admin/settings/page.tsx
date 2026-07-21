@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+in import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { BrandProfile } from "@/lib/types";
-import { Topbar } from "../../components";
+import { Topbar, Field, ImageUpload, focusFirstInvalid } from "../../components";
+import { LIMITS, type Errors, brandName, hasErrors, hexColor, maxLen } from "@/lib/validation";
 
 interface Draft {
   brand_name: string;
@@ -26,13 +27,25 @@ function lighten(hex: string, amount = 0.4): string {
   return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 }
 
+function validate(d: Draft): Errors {
+  return {
+    brand_name: brandName(d.brand_name),
+    tagline: maxLen("Tagline", d.tagline, LIMITS.tagline),
+    theme_color: hexColor(d.theme_color),
+  };
+}
+
 export default function SettingsPage() {
   const [draft, setDraft] = useState<Draft>(empty);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [touched, setTouched] = useState(false);
+  const [logoError, setLogoError] = useState("");
+
+  const errors = useMemo(() => validate(draft), [draft]);
+  const invalid = hasErrors(errors);
 
   async function load() {
     const { brand } = await api.get<{ brand: BrandProfile }>("/api/admin/brand");
@@ -53,30 +66,21 @@ export default function SettingsPage() {
     setDraft((d) => ({ ...d, [k]: v }));
   }
 
-  function onPickLogo(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 512 * 1024) {
-      setError("Logo must be under 512 KB. Try a smaller image.");
+  async function save() {
+    setTouched(true);
+    if (invalid) {
+      setError("Fix the highlighted fields before saving.");
+      focusFirstInvalid();
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => up("logo", String(reader.result));
-    reader.readAsDataURL(file);
-  }
-
-  async function save() {
     setSaving(true);
     setError("");
     try {
-      const color = /^#[0-9a-fA-F]{6}$/.test(draft.theme_color)
-        ? draft.theme_color
-        : "#ef5a7f";
       await api.put("/api/admin/brand", {
-        brand_name: draft.brand_name,
-        tagline: draft.tagline || null,
+        brand_name: draft.brand_name.trim(),
+        tagline: draft.tagline.trim() || null,
         logo: draft.logo || null,
-        theme_color: color,
+        theme_color: draft.theme_color.toLowerCase(),
       });
       setSaved(true);
       await load();
@@ -87,7 +91,10 @@ export default function SettingsPage() {
     }
   }
 
-  const grad = `linear-gradient(90deg, ${draft.theme_color}, ${lighten(draft.theme_color)})`;
+  // Preview surfaces must never render a broken gradient while the hex field is
+  // mid-edit, so fall back to the default accent until the value parses.
+  const safeColor = /^#[0-9a-fA-F]{6}$/.test(draft.theme_color) ? draft.theme_color : "#ef5a7f";
+  const grad = `linear-gradient(90deg, ${safeColor}, ${lighten(safeColor)})`;
   const initials =
     draft.brand_name
       .split(" ")
@@ -127,87 +134,53 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div className="field">
-                <label>Brand Name</label>
+              <Field
+                label="Brand Name"
+                required
+                error={errors.brand_name}
+                touched={touched}
+                counter={`${draft.brand_name.length}/${LIMITS.brandName}`}
+              >
                 <input
                   className="input"
                   value={draft.brand_name}
+                  maxLength={LIMITS.brandName}
                   placeholder="e.g. FlipFeed"
                   onChange={(e) => up("brand_name", e.target.value)}
                 />
-              </div>
+              </Field>
 
-              <div className="field">
-                <label>Brand Tagline</label>
+              <Field
+                label="Brand Tagline"
+                error={errors.tagline}
+                touched={touched}
+                counter={`${draft.tagline.length}/${LIMITS.tagline}`}
+              >
                 <input
                   className="input"
                   value={draft.tagline}
+                  maxLength={LIMITS.tagline}
                   placeholder="Show up daily. Don't break the chain."
                   onChange={(e) => up("tagline", e.target.value)}
                 />
-              </div>
+              </Field>
 
-              <div className="field">
-                <label>Logo</label>
-                <div className="flex" style={{ gap: 12, alignItems: "center" }}>
-                  <div
-                    style={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 12,
-                      overflow: "hidden",
-                      display: "grid",
-                      placeItems: "center",
-                      background: draft.logo ? "#fff" : grad,
-                      color: "#fff",
-                      fontWeight: 800,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {draft.logo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={draft.logo}
-                        alt="logo"
-                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                      />
-                    ) : (
-                      initials
-                    )}
-                  </div>
-                  <button className="btn ghost sm" onClick={() => fileRef.current?.click()}>
-                    Upload image
-                  </button>
-                  {draft.logo && (
-                    <button className="btn ghost sm" onClick={() => up("logo", "")}>
-                      Remove
-                    </button>
-                  )}
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    hidden
-                    onChange={onPickLogo}
-                  />
-                </div>
-                <div className="muted" style={{ marginTop: 8, fontSize: 12.5 }}>
-                  PNG, JPG or SVG under 512 KB. Or paste an image URL below.
-                </div>
-                <input
-                  className="input"
-                  style={{ marginTop: 8 }}
-                  value={draft.logo.startsWith("data:") ? "" : draft.logo}
-                  placeholder="https://…/logo.png"
-                  onChange={(e) => up("logo", e.target.value)}
+              {/* Upload failures land on the field itself, not the page banner:
+                  the banner is shared with save() and each would wipe the other. */}
+              <Field label="Logo" error={logoError} touched={!!logoError}>
+                <ImageUpload
+                  value={draft.logo}
+                  onChange={(v) => up("logo", v)}
+                  onError={setLogoError}
+                  hint="Square works best. PNG, JPG, WebP or GIF — resized automatically."
                 />
-              </div>
+              </Field>
 
-              <div className="field">
-                <label>Theme Colour</label>
+              <Field label="Theme Colour" error={errors.theme_color} touched={touched}>
                 <div className="flex" style={{ gap: 12, alignItems: "center" }}>
                   <input
                     type="color"
+                    aria-label="Pick theme colour"
                     value={/^#[0-9a-fA-F]{6}$/.test(draft.theme_color) ? draft.theme_color : "#ef5a7f"}
                     onChange={(e) => up("theme_color", e.target.value)}
                     style={{
@@ -218,15 +191,19 @@ export default function SettingsPage() {
                       borderRadius: 8,
                       background: "none",
                       cursor: "pointer",
+                      flexShrink: 0,
                     }}
                   />
                   <input
                     className="input"
+                    aria-label="Theme colour hex"
                     style={{ maxWidth: 160, textTransform: "lowercase" }}
                     value={draft.theme_color}
+                    maxLength={7}
                     onChange={(e) => up("theme_color", e.target.value)}
                   />
                   <span
+                    aria-hidden
                     style={{
                       flex: 1,
                       height: 40,
@@ -235,7 +212,7 @@ export default function SettingsPage() {
                     }}
                   />
                 </div>
-              </div>
+              </Field>
             </div>
 
             {/* ---- Live preview ---- */}
@@ -300,7 +277,7 @@ export default function SettingsPage() {
 
                 <div style={{ fontSize: 40, fontWeight: 800, color: "#f3f0ef", lineHeight: 1 }}>
                   <span>🔥</span>{" "}
-                  <span style={{ color: draft.theme_color }}>7</span>
+                  <span style={{ color: safeColor }}>7</span>
                 </div>
                 <div style={{ color: "#9a97a3", fontSize: 13, margin: "6px 0 18px" }}>
                   Your Daily Streak
