@@ -1,0 +1,36 @@
+# ─── Streaks API — front controller ────────────────────────────────────────
+# Every /api/* request is routed to public/index.php. This is an *internal*
+# rewrite, so $_SERVER['REQUEST_URI'] still reads "/api/health" and the router's
+# registered paths (which include the /api prefix) match unchanged.
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # The -f guard is what stops the rewrite looping: once the target resolves to
+  # the real public/index.php, the condition no longer holds.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ public/index.php [QSA,L]
+</IfModule>
+
+# Authorization is stripped by some CGI/FastCGI setups before PHP sees it, which
+# would break every admin route. Re-expose it.
+<IfModule mod_rewrite.c>
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+<IfModule mod_setenvif.c>
+  SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
+# .env holds the database password — never serve it, or any other dotfile.
+<FilesMatch "^\.">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>

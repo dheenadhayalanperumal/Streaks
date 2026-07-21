@@ -1,6 +1,6 @@
 "use client";
 
-in import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { BrandProfile } from "@/lib/types";
 import { Topbar, Field, ImageUpload, focusFirstInvalid } from "../../components";

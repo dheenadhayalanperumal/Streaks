@@ -451,12 +451,16 @@
   gap: 10px;
   overflow-x: auto;
   scroll-snap-type: x proximity;
-  /* `overflow-x: auto` also clips vertically, at the padding box. The pulse ring
-     on the "next" pip and the reward halo both bleed ~6px, so the scroller needs
-     inline padding — pulled back out with a matching negative margin so the row
-     still lines up with the rest of the card. */
-  padding: 2px 14px 10px;
-  margin: 16px -14px 12px;
+  /* `overflow-x: auto` also clips VERTICALLY, at the padding box — so the
+     padding has to clear every glow a pip can cast, or the shadow is sliced
+     along a straight line and a filled circle reads as a flat-bottomed square:
+       .done    box-shadow 0 6px 14px  -> 20px below, 8px above
+       .reward  0 0 0 2px + 0 4px 12px -> 16px below, 8px above
+       .next    pulse 0 0 0 6px        -> 6px all round
+     The negative margins cancel the padding, so spacing is unchanged:
+     top 8+10 = 18px and bottom 0+22 = 22px, exactly as before. */
+  padding: 10px 16px 22px;
+  margin: 8px -16px 0;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   scroll-padding-inline: 40%;
@@ -489,8 +493,17 @@
   color: rgba(255, 255, 255, 0.8);
   transition: transform 0.2s;
 }
+/* A completed day is a solid disc: the 2px border turns transparent and the
+   gradient fills the whole circle.
+   `background-origin` must be set *after* the `background` shorthand, which
+   resets it. Left at its `padding-box` default the gradient is sized to the
+   inner 38px but painted across the full 42px border box, so the ring the
+   border occupies renders a *repeat* of the gradient — a dark arc along the top
+   and a bright one along the bottom. That mismatched rim is what makes a filled
+   circle look square-edged. */
 .ccd-pip.done .dot {
   background: linear-gradient(160deg, #ffb43d, #f5772f);
+  background-origin: border-box;
   border-color: transparent;
   color: #fff;
   box-shadow: 0 6px 14px rgba(245, 119, 47, 0.45);
@@ -511,6 +524,7 @@
 }
 .ccd-pip.reward.done .dot {
   background: linear-gradient(160deg, #ffd85a, #f59e0b);
+  background-origin: border-box; /* see .ccd-pip.done .dot — shorthand resets it */
   border-color: transparent;
 }
 @keyframes ccd-pulse {

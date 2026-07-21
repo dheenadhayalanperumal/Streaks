@@ -1,0 +1,13 @@
+# Build assets are content-hashed by Next.js, so a new deploy produces new
+# filenames. Safe — and worth — caching permanently.
+#
+# The flip side: editing a file in here by hand does NOT change its name, so
+# returning visitors keep the old copy for up to a year. Always rebuild.
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresDefault "access plus 1 year"
+</IfModule>
+<IfModule mod_headers.c>
+  Header set Cache-Control "public, max-age=31536000, immutable"
+</IfModule>
+Options -Indexes

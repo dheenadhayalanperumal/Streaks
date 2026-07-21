@@ -1,0 +1,13 @@
+# Application internals — never reachable over HTTP. Requests are routed
+# through ../public/index.php, which includes these files from disk.
+#
+# This matters beyond tidiness: bin/seed.php would RESEED THE DATABASE if it
+# could be executed by a visitor, and migrations/*.sql would be served as
+# plain text, handing out the schema.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>
